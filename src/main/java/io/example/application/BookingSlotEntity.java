@@ -7,10 +7,14 @@ import akka.javasdk.eventsourcedentity.EventSourcedEntityContext;
 import io.example.domain.BookingEvent;
 import io.example.domain.Participant;
 import io.example.domain.Timeslot;
+
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.stream.Collectors;
 
 @ComponentId("booking-slot")
 public class BookingSlotEntity extends EventSourcedEntity<Timeslot, BookingEvent> {
@@ -23,42 +27,91 @@ public class BookingSlotEntity extends EventSourcedEntity<Timeslot, BookingEvent
     }
 
     public Effect<Done> markSlotAvailable(Command.MarkSlotAvailable cmd) {
-        return effects().error("not yet implemented");
+        var participant = cmd.participant();
+        var event = new BookingEvent.ParticipantMarkedAvailable(entityId, participant.id(),
+                participant.participantType());
+        return effects()
+                .persist(event)
+                .thenReply(newState -> Done.getInstance());
     }
 
     public Effect<Done> unmarkSlotAvailable(Command.UnmarkSlotAvailable cmd) {
-        return effects().error("not yet implemented");
+        var participant = cmd.participant();
+        var event = new BookingEvent.ParticipantUnmarkedAvailable(entityId, participant.id(),
+                participant.participantType());
+        return effects()
+                .persist(event)
+                .thenReply(newState -> Done.getInstance());
     }
 
     // NOTE: booking a slot should produce 3
     // `ParticipantBooked` events
     public Effect<Done> bookSlot(Command.BookReservation cmd) {
-        return effects().error("not yet implemented");
+        var state = currentState();
+        if (!state.isBookable(cmd.studentId(), cmd.aircraftId(), cmd.instructorId())) {
+            return effects().error("All participants must be available before booking");
+        }
+
+        if (!state.findBooking(cmd.bookingId()).isEmpty()) {
+            return effects().error("Booking already exists with this id: " + cmd.bookingId());
+        }
+
+        if (cmd.slotTime().isBefore(LocalDateTime.now())) {
+            return effects().error("Cannot book past time slot, Bookings can only be created for future time slots.");
+        }
+        var studentEvent = new BookingEvent.ParticipantBooked(entityId, cmd.studentId(),
+                Participant.ParticipantType.STUDENT, cmd.bookingId());
+        var instructorEvent = new BookingEvent.ParticipantBooked(entityId, cmd.instructorId(),
+                Participant.ParticipantType.INSTRUCTOR, cmd.bookingId());
+        var aircraftEvent = new BookingEvent.ParticipantBooked(entityId, cmd.aircraftId(),
+                Participant.ParticipantType.AIRCRAFT, cmd.bookingId());
+
+        return effects()
+                .persistAll(List.of(studentEvent, instructorEvent, aircraftEvent))
+                .thenReply(newState -> Done.getInstance());
     }
 
     // NOTE: canceling a booking should produce 3
     // `ParticipantCanceled` events
     public Effect<Done> cancelBooking(String bookingId) {
-        return effects().error("not yet implemented");
+        // First find the existing booking from state for a given bookingId.
+        var bookings = currentState().findBooking(bookingId);
 
+        if (bookings.isEmpty()) {
+            logger.warn("Attempt to cancel a non existing booking = {}, slotId = {}", bookingId, entityId);
+            return effects().error("Booking not found for bookingId: " + bookingId);
+        }
+
+        // Build cancellation events for all participants in the reservation
+        List<BookingEvent> cancelEvents = bookings.stream().map(b -> new BookingEvent.ParticipantCanceled(
+                entityId,
+                b.participant().id(),
+                b.participant().participantType(),
+                b.bookingId())).collect(Collectors.toList());
+
+        return effects().persistAll(cancelEvents).thenReply(newState -> Done.getInstance());
     }
 
     public ReadOnlyEffect<Timeslot> getSlot() {
-        return effects().error("not yet implemented");
+        return effects().reply(currentState());
     }
 
     @Override
     public Timeslot emptyState() {
-        return new Timeslot(
-                // NOTE: these are just estimates for capacity based on it being a sample
-                HashSet.newHashSet(10), HashSet.newHashSet(10));
+        return new Timeslot(new HashSet<>(), new HashSet<>());
     }
 
     @Override
     public Timeslot applyEvent(BookingEvent event) {
-        // Supply your own implementation to update state based
-        // on the event
-        return currentState();
+        return switch (event) {
+            case BookingEvent.ParticipantBooked participantBooked -> currentState().book(participantBooked);
+            case BookingEvent.ParticipantCanceled participantCanceled ->
+                currentState().cancelBooking(participantCanceled.bookingId());
+            case BookingEvent.ParticipantMarkedAvailable participantMarkedAvailable ->
+                currentState().reserve(participantMarkedAvailable);
+            case BookingEvent.ParticipantUnmarkedAvailable participantUnmarkedAvailable ->
+                currentState().unreserve(participantUnmarkedAvailable);
+        };
     }
 
     public sealed interface Command {
@@ -69,7 +122,7 @@ public class BookingSlotEntity extends EventSourcedEntity<Timeslot, BookingEvent
         }
 
         record BookReservation(
-                String studentId, String aircraftId, String instructorId, String bookingId)
+                String studentId, String aircraftId, String instructorId, String bookingId, LocalDateTime slotTime)
                 implements Command {
         }
     }

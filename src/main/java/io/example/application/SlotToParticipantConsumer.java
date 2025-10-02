@@ -23,8 +23,57 @@ public class SlotToParticipantConsumer extends Consumer {
     }
 
     public Effect onEvent(BookingEvent event) {
-        // Supply your own implementation
-        return effects().done();
+        try {
+            switch (event) {
+                case BookingEvent.ParticipantMarkedAvailable participantMarkedAvailable -> {
+                    logger.info("Processing ParticipantMarkedAvailable event: {}", participantMarkedAvailable);
+                    client.forEventSourcedEntity(participantSlotId(participantMarkedAvailable))
+                            .method(ParticipantSlotEntity::markAvailable)
+                            .invoke(new ParticipantSlotEntity.Commands.MarkAvailable(
+                                    participantMarkedAvailable.slotId(),
+                                    participantMarkedAvailable.participantId(),
+                                    participantMarkedAvailable.participantType()));
+                }
+
+                case BookingEvent.ParticipantUnmarkedAvailable participantUnmarkedAvailable -> {
+                    logger.info("Processing UnmarkedAvailable: {}", participantUnmarkedAvailable);
+                    client.forEventSourcedEntity(participantSlotId(participantUnmarkedAvailable))
+                            .method(ParticipantSlotEntity::unmarkAvailable)
+                            .invoke(new ParticipantSlotEntity.Commands.UnmarkAvailable(
+                                    participantUnmarkedAvailable.slotId(),
+                                    participantUnmarkedAvailable.participantId(),
+                                    participantUnmarkedAvailable.participantType()));
+                }
+                case BookingEvent.ParticipantBooked participantBooked -> {
+                    logger.info("Processing Booked: {}", participantBooked);
+                    client.forEventSourcedEntity(participantSlotId(participantBooked))
+                            .method(ParticipantSlotEntity::book)
+                            .invoke(new ParticipantSlotEntity.Commands.Book(
+                                    participantBooked.slotId(),
+                                    participantBooked.participantId(),
+                                    participantBooked.participantType(),
+                                    participantBooked.bookingId()));
+                }
+                case BookingEvent.ParticipantCanceled participantCanceled -> {
+                    logger.info("Processing Canceled: {}", participantCanceled);
+                    client.forEventSourcedEntity(participantSlotId(participantCanceled))
+                            .method(ParticipantSlotEntity::cancel)
+                            .invoke(new ParticipantSlotEntity.Commands.Cancel(
+                                    participantCanceled.slotId(),
+                                    participantCanceled.participantId(),
+                                    participantCanceled.participantType(),
+                                    participantCanceled.bookingId()));
+                }
+                default -> {
+                    logger.warn("Unknown event type: {}", event.getClass().getSimpleName());
+                    effects().ignore();
+                }
+            }
+            return effects().done();
+        } catch (Exception ex) {
+            logger.error("Error processing event {}: {}", event, ex.getMessage(), ex);
+            return effects().ignore();
+        }
     }
 
     // Participant slots are keyed by a derived key made up of
