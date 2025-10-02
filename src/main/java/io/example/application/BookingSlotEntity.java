@@ -8,7 +8,6 @@ import io.example.domain.BookingEvent;
 import io.example.domain.Participant;
 import io.example.domain.Timeslot;
 
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 
@@ -56,9 +55,6 @@ public class BookingSlotEntity extends EventSourcedEntity<Timeslot, BookingEvent
             return effects().error("Booking already exists with this id: " + cmd.bookingId());
         }
 
-        if (cmd.slotTime().isBefore(LocalDateTime.now())) {
-            return effects().error("Cannot book past time slot, Bookings can only be created for future time slots.");
-        }
         var studentEvent = new BookingEvent.ParticipantBooked(entityId, cmd.studentId(),
                 Participant.ParticipantType.STUDENT, cmd.bookingId());
         var instructorEvent = new BookingEvent.ParticipantBooked(entityId, cmd.instructorId(),
@@ -122,7 +118,7 @@ public class BookingSlotEntity extends EventSourcedEntity<Timeslot, BookingEvent
         }
 
         record BookReservation(
-                String studentId, String aircraftId, String instructorId, String bookingId, LocalDateTime slotTime)
+                String studentId, String aircraftId, String instructorId, String bookingId)
                 implements Command {
         }
     }

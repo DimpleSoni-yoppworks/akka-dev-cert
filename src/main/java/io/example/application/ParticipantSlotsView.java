@@ -3,6 +3,7 @@ package io.example.application;
 import akka.javasdk.annotations.ComponentId;
 import akka.javasdk.annotations.Consume;
 import akka.javasdk.annotations.Query;
+import akka.javasdk.annotations.Table;
 import akka.javasdk.view.TableUpdater;
 import akka.javasdk.view.View;
 import io.example.application.ParticipantSlotEntity.Event.Booked;
@@ -19,7 +20,8 @@ import org.slf4j.LoggerFactory;
 public class ParticipantSlotsView extends View {
 
     private static Logger logger = LoggerFactory.getLogger(ParticipantSlotsView.class);
-
+    
+    @Table("slots")
     @Consume.FromEventSourcedEntity(ParticipantSlotEntity.class)
     public static class ParticipantSlotsViewUpdater extends TableUpdater<SlotRow> {
 
@@ -31,9 +33,9 @@ public class ParticipantSlotsView extends View {
                 case Canceled e ->
                     new SlotRow(e.slotId(), e.participantId(), e.participantType().name(), e.bookingId(), "CANCELED");
                 case MarkedAvailable e ->
-                    new SlotRow(e.slotId(), e.participantId(), e.participantType().name(), "NA", "AVAILABLE");
+                    new SlotRow(e.slotId(), e.participantId(), e.participantType().name(), "", "AVAILABLE");
                 case UnmarkedAvailable e ->
-                    new SlotRow(e.slotId(), e.participantId(), e.participantType().name(), "NA", "UNAVAILABLE");
+                    new SlotRow(e.slotId(), e.participantId(), e.participantType().name(), "", "UNAVAILABLE");
             };
 
             logger.info("Updating participant slot row: {}", row);
@@ -54,18 +56,13 @@ public class ParticipantSlotsView extends View {
     public record SlotList(List<SlotRow> slots) {
     }
 
-    /**
-     * @param participantId
-     * @return With the @Query annotation, Akka will return all rows persisted by
-     *         updateRow(row) matching that participantId.
-     */
-    @Query("SELECT * FROM SlotRow WHERE participantId = :participantId")
-    public QueryEffect<SlotRow> getSlotsByParticipant(String participantId) {
+    @Query("SELECT * as slots FROM slots WHERE participantId = :participantId")
+    public QueryEffect<SlotList> getSlotsByParticipant(String participantId) {
         return queryResult();
     }
 
-    @Query("SELECT * FROM SlotRow WHERE participantId = :participantId AND status = :status")
-    public QueryEffect<SlotRow> getSlotsByParticipantAndStatus(ParticipantStatusInput input) {
+    @Query("SELECT * as slots FROM slots WHERE participantId = :participantId AND status = :status")
+    public QueryEffect<SlotList> getSlotsByParticipantAndStatus(ParticipantStatusInput input) {
         return queryResult();
     }
 

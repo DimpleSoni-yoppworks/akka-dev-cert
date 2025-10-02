@@ -4,7 +4,7 @@
   <parent>
     <groupId>io.akka</groupId>
     <artifactId>akka-javasdk-parent</artifactId>
-    <version>3.3.0</version>
+    <version>3.5.3</version>
   </parent>
   
   <groupId>io.example</groupId>
@@ -45,11 +45,4 @@
   <dependencies>
     <!-- Your dependencies go here -->
   </dependencies>
-  <repositories>
-   <repository>
-    <id>akka-secure</id>
-    <name>Akka Secure</name>
-    <url>https://repo.akka.io/P0-nh6ckPX1kdRIRz2VUVNi7b2bldBC2_AqLt39qi0azQFRl/secure</url>
-   </repository>
-  </repositories>
 </project>

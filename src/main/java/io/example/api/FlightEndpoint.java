@@ -43,10 +43,6 @@ public class FlightEndpoint extends AbstractHttpEndpoint {
     public HttpResponse createBooking(String slotId, BookingRequest request) {
         log.info("Creating booking for slot {}: {}", slotId, request);
 
-        if (request.slotTime().isBefore(LocalDateTime.now())) {
-            return HttpResponses.badRequest("Cannot book past time-slot: " + request.slotTime());
-        }
-
         componentClient
                 .forEventSourcedEntity(slotId)
                 .method(BookingSlotEntity::bookSlot)
@@ -54,8 +50,7 @@ public class FlightEndpoint extends AbstractHttpEndpoint {
                         request.studentId(),
                         request.aircraftId(),
                         request.instructorId(),
-                        request.bookingId(),
-                        request.slotTime));
+                        request.bookingId()));
 
         return HttpResponses.created();
     }
@@ -77,20 +72,13 @@ public class FlightEndpoint extends AbstractHttpEndpoint {
     // Used to retrieve bookings and slots in which the participant is available
     @Get("/slots/{participantId}/{status}")
     public SlotList slotsByStatus(String participantId, String status) {
-        ViewClient viewClient = componentClient.forView();
+        log.info("Retrieving slots for participant {} with status {}", participantId, status);
 
-        ParticipantSlotsView.SlotRow resultRow = viewClient.<ParticipantSlotsView, ParticipantSlotsView.SlotRow>method(
-                (ParticipantSlotsView view) -> view.getSlotsByParticipantAndStatus(
-                        new ParticipantSlotsView.ParticipantStatusInput(participantId, status)))
-                .invokeAsync()
-                .toCompletableFuture()
-                .join();
-                
-        if (resultRow != null) {
-            return new ParticipantSlotsView.SlotList(List.of(resultRow));
-        } else {
-            return new ParticipantSlotsView.SlotList(List.of());
-        }
+        return componentClient
+                .forView()
+                .method(ParticipantSlotsView::getSlotsByParticipantAndStatus)
+                .invoke(new ParticipantSlotsView.ParticipantStatusInput(participantId, status));
+
     }
 
     // Returns the internal availability state for a given slot
@@ -120,7 +108,7 @@ public class FlightEndpoint extends AbstractHttpEndpoint {
         log.info("Marking time-slot available for entity {}", slotId);
 
         componentClient
-                .forEventSourcedEntity(slotId + "-" + request.participantId())
+                .forEventSourcedEntity(slotId)
                 .method(ParticipantSlotEntity::markAvailable)
                 .invoke(new ParticipantSlotEntity.Commands.MarkAvailable(
                         slotId,
@@ -138,11 +126,11 @@ public class FlightEndpoint extends AbstractHttpEndpoint {
             participantType = ParticipantType.valueOf(request.participantType().trim().toUpperCase());
         } catch (IllegalArgumentException ex) {
             log.warn("Bad participant type {}", request.participantType());
-            throw HttpException.badRequest("invalid participant type");
+            throw HttpException.badRequest("Invalid participant type");
         }
 
         componentClient
-                .forEventSourcedEntity(slotId + "-" + request.participantId())
+                .forEventSourcedEntity(slotId)
                 .method(ParticipantSlotEntity::unmarkAvailable)
                 .invoke(new ParticipantSlotEntity.Commands.UnmarkAvailable(
                         slotId,
@@ -154,7 +142,7 @@ public class FlightEndpoint extends AbstractHttpEndpoint {
 
     // Public API representation of a booking request
     public record BookingRequest(
-            String studentId, String aircraftId, String instructorId, String bookingId, LocalDateTime slotTime) {
+            String studentId, String aircraftId, String instructorId, String bookingId) {
     }
 
     // Public API representation of an availability mark/unmark request
