@@ -45,12 +45,6 @@ public class ParticipantSlotEntity
   }
 
   public Effect<Done> book(ParticipantSlotEntity.Commands.Book book) {
-    var state = currentState();
-
-    if ("BOOKED".equalsIgnoreCase(state.status())) {
-      logger.warn("Cannot book participant {}: already booked", book.participantId());
-      return effects().error("Participant already booked.");
-    }
     var event = new Event.Booked(entityId, book.participantId(), book.participantType(), book.bookingId());
     logger.info("Persisting Booked event: slotId={}, participantId={}, participantType={}, bookingId={}",
         entityId, book.participantId(), book.participantType(), book.bookingId());
@@ -60,10 +54,6 @@ public class ParticipantSlotEntity
   }
 
   public Effect<Done> cancel(ParticipantSlotEntity.Commands.Cancel cancel) {
-    var state = currentState();
-    if ("BOOKED".equalsIgnoreCase(state.status())) {
-      return effects().error("Cannot cancel: Participant is not booked");
-    }
     var event = new Event.Canceled(entityId, cancel.participantId(), cancel.participantType(), cancel.bookingId());
     logger.info("Persisting Canceled event: slotId={}, participantId={}, participantType={}, bookingId={}",
         entityId, cancel.participantId(), cancel.participantType(), cancel.bookingId());

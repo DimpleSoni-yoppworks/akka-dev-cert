@@ -1,8 +1,6 @@
 package io.example.api;
 
-import java.time.LocalDateTime;
 import java.util.Collections;
-import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,12 +16,10 @@ import akka.javasdk.http.AbstractHttpEndpoint;
 import akka.javasdk.http.HttpException;
 import akka.javasdk.http.HttpResponses;
 import io.example.application.BookingSlotEntity;
-import io.example.application.ParticipantSlotEntity;
 import io.example.application.ParticipantSlotsView;
 import io.example.application.ParticipantSlotsView.SlotList;
 import io.example.domain.Participant.ParticipantType;
 import io.example.domain.Timeslot;
-import akka.javasdk.client.ViewClient;
 
 @Acl(allow = @Acl.Matcher(principal = Acl.Principal.INTERNET))
 @HttpEndpoint("/flight")
@@ -106,14 +102,13 @@ public class FlightEndpoint extends AbstractHttpEndpoint {
         }
 
         log.info("Marking time-slot available for entity {}", slotId);
-
         componentClient
                 .forEventSourcedEntity(slotId)
-                .method(ParticipantSlotEntity::markAvailable)
-                .invoke(new ParticipantSlotEntity.Commands.MarkAvailable(
-                        slotId,
-                        request.participantId(),
-                        participantType));
+                .method(BookingSlotEntity::markSlotAvailable)
+                .invoke(new BookingSlotEntity.Command.MarkSlotAvailable(
+                        new io.example.domain.Participant(
+                                request.participantId(),
+                                participantType)));
 
         return HttpResponses.ok();
     }
@@ -126,17 +121,17 @@ public class FlightEndpoint extends AbstractHttpEndpoint {
             participantType = ParticipantType.valueOf(request.participantType().trim().toUpperCase());
         } catch (IllegalArgumentException ex) {
             log.warn("Bad participant type {}", request.participantType());
-            throw HttpException.badRequest("Invalid participant type");
+            throw HttpException.badRequest("invalid participant type");
         }
 
         componentClient
                 .forEventSourcedEntity(slotId)
-                .method(ParticipantSlotEntity::unmarkAvailable)
-                .invoke(new ParticipantSlotEntity.Commands.UnmarkAvailable(
-                        slotId,
-                        request.participantId(),
-                        participantType));
-
+                .method(BookingSlotEntity::unmarkSlotAvailable)
+                .invoke(new BookingSlotEntity.Command.UnmarkSlotAvailable(
+                        new io.example.domain.Participant(
+                            request.participantId(),
+                             participantType)));
+                             
         return HttpResponses.ok();
     }
 
